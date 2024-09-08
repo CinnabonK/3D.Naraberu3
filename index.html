@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3Dまるばつゲーム　角→角なしver</title>
+    <title>3D Tic-Tac-Toe with AI</title>
     <style>
         body {
             margin: 0;
@@ -141,11 +141,13 @@
     </div>
 
     <button id="restart-btn">Restart</button>
+    <button id="ai-btn">AIと対戦</button>
 
     <script>
         const container = document.getElementById('cube-container');
         const cubeTemplate = container.children[0];
         const restartButton = document.getElementById('restart-btn');
+        const aiButton = document.getElementById('ai-btn');
 
         // 初期化
         for (let i = 1; i < 27; i++) {
@@ -157,6 +159,7 @@
         let player1CornersSelected = [];
         let player2CornersSelected = [];
         let isCircleTurn = true;
+        let isAIPlaying = false; // AIモードのフラグ
         const cubes = Array.from(document.querySelectorAll('.cube')); // NodeListを配列に変換
         let gameState = Array(27).fill(null);
         let player1LastTurnWasCorner = false;
@@ -164,7 +167,7 @@
 
         cubes.forEach((cube, index) => {
             cube.addEventListener('click', function() {
-                if (cube.classList.contains('clicked') || index === 13) return;
+                if (cube.classList.contains('clicked') || index === 13 || !isCircleTurn) return;
 
                 const currentPlayerCorners = isCircleTurn ? player1CornersSelected : player2CornersSelected;
                 const lastTurnWasCorner = isCircleTurn ? player1LastTurnWasCorner : player2LastTurnWasCorner;
@@ -176,44 +179,18 @@
                     }
                 }
 
-                // 通常の選択処理
-                cube.classList.add('clicked');
-                cube.classList.add('clicked-animate'); // アニメーションを適用
-                const symbol = isCircleTurn ? '○' : '×';
-                gameState[index] = symbol;
+                // プレイヤーのターン
+                playerMove(cube, index);
 
-                const faces = cube.querySelectorAll('.cube-face');
-                faces.forEach(face => {
-                    face.textContent = symbol;
-                    face.style.backgroundColor = symbol === '○' ? 'red' : 'blue';
-                });
-
-                // 角の選択を追跡
-                if (cornerIndexes.includes(index)) {
-                    currentPlayerCorners.push(index);
-                    if (isCircleTurn) {
-                        player1LastTurnWasCorner = true;
-                    } else {
-                        player2LastTurnWasCorner = true;
-                    }
-                } else {
-                    if (isCircleTurn) {
-                        player1LastTurnWasCorner = false;
-                    } else {
-                        player2LastTurnWasCorner = false;
-                    }
+                // AIのターン
+                if (isAIPlaying && !isCircleTurn) {
+                    setTimeout(aiMove, 500); // AIのターンを少し遅らせる
                 }
-
-                if (checkWin(symbol)) {
-                    setTimeout(() => alert(`${symbol} wins!`), 100);
-                }
-
-                isCircleTurn = !isCircleTurn;
-                highlightUnselectableCorners();
             });
         });
 
         restartButton.addEventListener('click', resetGame);
+        aiButton.addEventListener('click', toggleAIMode);
 
         function resetGame() {
             gameState = Array(27).fill(null);
@@ -232,7 +209,87 @@
             });
         }
 
-        function checkWin(symbol) {
+        function playerMove(cube, index) {
+            cube.classList.add('clicked');
+            cube.classList.add('clicked-animate'); // アニメーションを適用
+            const symbol = isCircleTurn ? '○' : '×';
+            gameState[index] = symbol;
+
+            const faces = cube.querySelectorAll('.cube-face');
+            faces.forEach(face => {
+                face.textContent = symbol;
+                face.style.backgroundColor = symbol === '○' ? 'red' : 'blue';
+            });
+
+            // 角の選択を追跡
+            if (cornerIndexes.includes(index)) {
+                const currentPlayerCorners = isCircleTurn ? player1CornersSelected : player2CornersSelected;
+                currentPlayerCorners.push(index);
+                if (isCircleTurn) {
+                    player1LastTurnWasCorner = true;
+                } else {
+                    player2LastTurnWasCorner = true;
+                }
+            } else {
+                if (isCircleTurn) {
+                    player1LastTurnWasCorner = false;
+                } else {
+                    player2LastTurnWasCorner = false;
+                }
+            }
+
+            if (checkWin(symbol)) {
+                setTimeout(() => alert(`${symbol} wins!`), 100);
+            }
+
+            isCircleTurn = !isCircleTurn;
+            highlightUnselectableCorners();
+        }
+
+        function toggleAIMode() {
+            isAIPlaying = !isAIPlaying;
+            resetGame();
+            if (isAIPlaying) {
+                aiButton.textContent = "AIモードオン";
+            } else {
+                aiButton.textContent = "AIモードオフ";
+            }
+        }
+
+        // AIのターン (Minimaxアルゴリズムを適用)
+        function aiMove() {
+            const bestMove = minimax(gameState, false).index;
+            const selectedCube = cubes[bestMove];
+            playerMove(selectedCube, bestMove);
+        }
+
+        function minimax(state, isMaximizingPlayer) {
+            // 勝利チェック
+            const winner = checkWinner();
+            if (winner === '○') return { score: -10 }; // プレイヤーが勝った
+            if (winner === '×') return { score: 10 };  // AIが勝った
+            if (isDraw()) return { score: 0 };          // 引き分け
+
+            // 再帰探索
+            const moves = [];
+            for (let i = 0; i < state.length; i++) {
+                if (state[i] === null) {
+                    const newState = [...state];
+                    newState[i] = isMaximizingPlayer ? '×' : '○';
+                    const score = minimax(newState, !isMaximizingPlayer).score;
+                    moves.push({ index: i, score });
+                }
+            }
+
+            // ベストムーブを選択
+            if (isMaximizingPlayer) {
+                return moves.reduce((bestMove, move) => (move.score > bestMove.score ? move : bestMove), { score: -Infinity });
+            } else {
+                return moves.reduce((bestMove, move) => (move.score < bestMove.score ? move : bestMove), { score: Infinity });
+            }
+        }
+
+        function checkWinner() {
             const winningCombinations = [
                 [0, 1, 2], [3, 4, 5], [6, 7, 8],
                 [9, 10, 11], [12, 13, 14], [15, 16, 17],
@@ -247,26 +304,27 @@
                 [0, 12, 24], [2, 14, 26], [6, 12, 18], [8, 14, 20]
             ];
 
-            return winningCombinations.some(combination =>
-                combination.every(index => gameState[index] === symbol)
-            );
+            for (let combo of winningCombinations) {
+                const [a, b, c] = combo;
+                if (gameState[a] && gameState[a] === gameState[b] && gameState[a] === gameState[c]) {
+                    return gameState[a];
+                }
+            }
+            return null;
         }
 
-        // 角以外の場所が選択できるか確認
-        function canSelectNonCorner() {
-            return cubes.some((cube, index) => !cube.classList.contains('clicked') && !cornerIndexes.includes(index));
+        function isDraw() {
+            return gameState.every(cell => cell !== null);
         }
 
         // 選択できない角を視覚的にハイライト
         function highlightUnselectableCorners() {
             const lastTurnWasCorner = isCircleTurn ? player1LastTurnWasCorner : player2LastTurnWasCorner;
 
-            // 全ての角キューブをチェック
             cornerIndexes.forEach(index => {
                 const cube = cubes[index];
                 const faces = cube.querySelectorAll('.cube-face');
                 
-                // 現在のプレイヤーが前回角を選んでいた場合はグレーにする
                 if (lastTurnWasCorner) {
                     faces.forEach(face => {
                         face.style.backgroundColor = 'gray'; // 選択できないことを示す
